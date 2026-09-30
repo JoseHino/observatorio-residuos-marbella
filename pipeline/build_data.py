@@ -4,9 +4,11 @@
     python pipeline/build_data.py
 
 Fuentes:
+  - costadelsol.eco (portal del Complejo Ambiental Costa del Sol: Mancomunidad
+    + Urbaser): informe historico de Marbella 2020-2025 y trimestre en curso.
   - Mancomunidad de Municipios de la Costa del Sol Occidental: PDF anuales con
-    la recogida mensual de Marbella por fraccion (datos del Complejo Ambiental
-    Costa del Sol, gestionado por Urbaser) y notas de prensa de balance.
+    la recogida mensual de Marbella por fraccion, 2014-2019 (y 2020-2021, que
+    se sustituyen por la cifra revisada de costadelsol.eco).
   - INE, Padron municipal (serie DPOP13669, Marbella, poblacion a 1 de enero).
   - Junta de Andalucia (REDIAM / Informe de Medio Ambiente): kg de residuos
     municipales por habitante y ano en Andalucia. No hay fichero descargable
@@ -28,13 +30,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from sources import ine, mancomunidad                    # noqa: E402
+from sources import ine, mancomunidad, costadelsol_eco   # noqa: E402
 from sources.comun import escribir_js, paso, ok, aviso    # noqa: E402
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, "data", "data.js")
 CACHE_PDF = os.path.join(RAIZ, "pipeline", "cache", "mancomunidad.json")
-CACHE_PRENSA = os.path.join(RAIZ, "pipeline", "cache", "prensa.json")
+CACHE_ECO = os.path.join(RAIZ, "pipeline", "cache", "costadelsol_eco.json")
 
 SERIE_PADRON = "DPOP13669"          # Marbella. Total. Total habitantes (Padron, 1 de enero)
 
@@ -107,18 +109,41 @@ def recoger(previo):
     paso("Mancomunidad - Datos residuos (PDF anuales)")
     cache, f = mancomunidad.recoger_pdfs(CACHE_PDF)
     fallos += f
-    x, series = [], {k: [] for k in FRACCIONES + ["comarca"]}
-    for anio in sorted(cache):
-        d = cache[anio]
+
+    # --- costadelsol.eco: informe historico y trimestre en curso -------------
+    paso("costadelsol.eco - informe historico de Marbella")
+    try:
+        eco, f = costadelsol_eco.recoger(CACHE_ECO)
+        fallos += f
+    except Exception as e:                                        # noqa: BLE001
+        fallos.append(f"costadelsol.eco: {e}")
+        aviso(str(e))
+        eco = json.load(open(CACHE_ECO, encoding="utf-8")) if os.path.exists(CACHE_ECO) else {"anios": {}, "trimestres": {}}
+
+    # Cada ano sale de UNA fuente: costadelsol.eco (mas reciente y revisada)
+    # cuando la tiene; si no, el PDF de la Mancomunidad.
+    por_anio, origen = {}, {}
+    for anio, d in cache.items():
         n = len(d["resto"])
-        for i in range(n):
+        suma = lambda a, b: [(d[a][i] if a in d else 0) + (d[b][i] if b in d else 0) for i in range(n)]   # noqa: E731
+        por_anio[anio] = {"resto": d["resto"], "envases": d.get("envases"),
+                          "vidrio": suma("vidrio", "vidrio_pap") if "vidrio" in d else None,
+                          "papel": suma("papel", "papel_pap") if "papel" in d else None,
+                          "comarca": d.get("resto_comarca")}
+        origen[anio] = "mancomunidad"
+    for anio, d in eco["anios"].items():
+        por_anio[anio] = {k: d[k] for k in FRACCIONES}
+        por_anio[anio]["comarca"] = None
+        origen[anio] = "costadelsol.eco"
+    datos["origen"] = dict(sorted(origen.items()))
+
+    x, series = [], {k: [] for k in FRACCIONES + ["comarca"]}
+    for anio in sorted(por_anio):
+        d = por_anio[anio]
+        for i in range(len(d["resto"])):
             x.append(f"{anio}-{i + 1:02d}")
-            g = lambda k: d[k][i] if k in d and i < len(d[k]) else None   # noqa: E731
-            series["resto"].append(g("resto"))
-            series["envases"].append(g("envases"))
-            series["vidrio"].append((g("vidrio") or 0) + (g("vidrio_pap") or 0) if g("vidrio") is not None else None)
-            series["papel"].append((g("papel") or 0) + (g("papel_pap") or 0) if g("papel") is not None else None)
-            series["comarca"].append(g("resto_comarca"))
+            for k in FRACCIONES + ["comarca"]:
+                series[k].append(d[k][i] if d.get(k) and i < len(d[k]) else None)
     # kg -> toneladas con un decimal
     t = lambda v: None if v is None else round(v / 1000, 1)   # noqa: E731
     mes = {"x": x}
@@ -135,6 +160,27 @@ def recoger(previo):
                           if mes["resto_comarca"][i] else None for i in range(len(x))]
     datos["mensual"] = mes
     datos["fuentes_pdf"] = {a: cache[a]["url"] for a in sorted(cache)}
+    datos["fuente_eco"] = eco.get("url")
+
+    # --- Trimestral: meses cerrados + trimestres que solo publica la web ------
+    tri = {}
+    for i, p in enumerate(x):
+        q = f"{p[:4]}T{(int(p[5:]) - 1) // 3 + 1}"
+        tri.setdefault(q, []).append(i)
+    tx = sorted(q for q, idx in tri.items() if len(idx) == 3)
+    trim = {"x": tx, "fuente": ["mensual"] * len(tx)}
+    for k in FRACCIONES:
+        trim[k] = [round(sum(mes[k][i] or 0 for i in tri[q]), 1) for q in tx]
+    for q, v in sorted(eco.get("trimestres", {}).items()):
+        if q in trim["x"]:
+            continue
+        trim["x"].append(q)
+        trim["fuente"].append("web")
+        trim["resto"].append(v["resto_t"])
+        trim["envases"].append(round(v["envases_kg"] / 1000, 1))
+        trim["papel"].append(round(v["papel_kg"] / 1000, 1))
+        trim["vidrio"].append(round(v["vidrio_kg"] / 1000, 1))
+    datos["trimestral"] = trim
 
     # --- Anual -------------------------------------------------------------
     anios = sorted({p[:4] for p in x})
@@ -196,18 +242,8 @@ def recoger(previo):
         if e:
             ok(f"{a}: equivalente {e:,} - padron = flotante media {fl:,}")
 
-    # --- Notas de prensa ---------------------------------------------------
-    paso("Mancomunidad - notas de balance anual")
-    try:
-        pr = mancomunidad.recoger_prensa(CACHE_PRENSA)
-    except Exception as e:                                        # noqa: BLE001
-        fallos.append(f"Prensa: {e}")
-        pr = json.load(open(CACHE_PRENSA, encoding="utf-8")) if os.path.exists(CACHE_PRENSA) else {}
-    datos["prensa"] = {"x": sorted(pr), "kg_hab_dia": [pr[a]["kg_hab_dia"] for a in sorted(pr)],
-                       "url": [pr[a]["url"] for a in sorted(pr)]}
-    ok(f"prensa: {', '.join(f'{a}={pr[a]['kg_hab_dia']}' for a in sorted(pr)) or 'sin datos'}")
-
     datos["meta"]["ultimo_periodo"] = x[-1] if x else None
+    datos["meta"]["ultimo_trimestre"] = trim["x"][-1] if trim["x"] else None
     datos["meta"]["ultimo_padron"] = datos["padron"]["x"][-1] if datos["padron"]["x"] else None
     datos["meta"]["fallos"] = fallos
     return datos, fallos

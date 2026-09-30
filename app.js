@@ -12,11 +12,13 @@
   var P = D.poblacion || { x: [] };
   var PA = D.poblacion_anual || { x: [], notas: {} };
   var J = D.junta || { x: [] };
-  var PR = D.prensa || { x: [] };
+  var TR = D.trimestral || { x: [] };
   var PAD = D.padron || { x: [], v: [] };
 
   /* ------------------------------------------------------------- Fuentes */
 
+  var F_ECO = { txt: 'costadelsol.eco · Informe histórico de Marbella (Complejo Ambiental Costa del Sol · Urbaser)', url: 'https://costadelsol.eco/marbella/#histrico' };
+  var F_AMBAS = { txt: 'costadelsol.eco · Mancomunidad Costa del Sol', url: 'https://costadelsol.eco/marbella/#histrico' };
   var F_MANC = { txt: 'Mancomunidad de Municipios de la Costa del Sol Occidental · Datos de residuos', url: 'https://mancomunidad.org/documentacion/residuos-solidos-urbanos/' };
   var F_INE = { txt: 'INE · Padrón municipal (Marbella)', url: 'https://www.ine.es/dyngs/INEbase/operacion.htm?c=Estadistica_C&cid=1254736177011&idp=1254734710990' };
   var F_JUNTA = { txt: 'Junta de Andalucía · Producción de residuos municipales', url: 'https://www.juntadeandalucia.es/medioambiente/portal/acceso-rediam/estadisticas/estadisticas-oficiales/produccion-gestion-residuos-municipales-andalucia' };
@@ -46,8 +48,9 @@
   var aniosMes = (function () { var s = {}; M.x.forEach(function (p) { s[p.slice(0, 4)] = 1; }); return Object.keys(s).sort().reverse(); })();
   var ultMes = M.x[M.x.length - 1];
 
-  var AVISO_SERIE = 'La Mancomunidad publicó el detalle mensual por municipio de 2014 a 2020; el documento de 2021 solo trae enero y febrero y no ha vuelto a publicar ninguno. ' +
-    'El proceso automático revisa su web cada semana: si publica un año nuevo, entra solo.';
+  var AVISO_SERIE = '<b>Dos fuentes, un salto de serie.</b> 2014-2019: PDF anuales de la Mancomunidad. 2020 en adelante: informe histórico de costadelsol.eco (Mancomunidad y Urbaser), ' +
+    'y el trimestre en curso de la misma web. En la fracción resto las dos no miden igual: para 2020 la Mancomunidad daba 124.259 t y costadelsol.eco 111.637 t, así que la caída de 2019 a 2020 exagera la real. ' +
+    'Envases, vidrio y papel-cartón sí coinciden en las dos.';
 
   /* ------------------------------------------------------------- Secciones */
 
@@ -67,7 +70,7 @@
             extra: [
               { label: 'Recogida selectiva', valor: deAnio('pct_selectiva', ultAnio), formato: pctF },
               { label: 'Kg por habitante y día', valor: deAnio('kg_hab_dia', ultAnio), formato: function (v) { return F.num(v, 2); } },
-              { label: 'Sobre 2019 (prepandemia)', valor: varPct('total', ultAnio, '2019'), formato: function (v) { return F.signo(v) + ' %'; } }
+              { label: 'Sobre ' + penAnio, valor: varPct('total', ultAnio, penAnio), formato: function (v) { return F.signo(v) + ' %'; } }
             ]
           },
           kpis: [
@@ -79,7 +82,7 @@
           cards: [
             {
               titulo: 'Toneladas por fracción', sub: 'Años completos',
-              chips: [CH_ANUAL], fuente: F_MANC, ancho: 'full',
+              chips: [CH_ANUAL], fuente: F_AMBAS, ancho: 'full',
               spec: {
                 type: 'stack', xType: 'anual', x: completos, yFormat: 'num', unidad: 't',
                 series: [
@@ -92,13 +95,13 @@
             },
             {
               titulo: 'Fracción recogida de forma selectiva', sub: 'Envases, vidrio y papel-cartón sobre el total',
-              chips: [CH_ANUAL], fuente: F_MANC,
+              chips: [CH_ANUAL], fuente: F_AMBAS,
               nota: 'Mide lo que se separa en origen, no lo que acaba reciclado: parte de la selectiva son impropios y parte del resto se recupera en planta.',
               spec: { type: 'bar', xType: 'anual', x: completos, yFormat: 'pct', series: [{ name: '% selectiva', data: soloCompletos('pct_selectiva') }] }
             },
             {
               titulo: 'Recogida selectiva por fracción', sub: 'Toneladas al año',
-              chips: [CH_ANUAL], fuente: F_MANC,
+              chips: [CH_ANUAL], fuente: F_AMBAS,
               spec: {
                 type: 'line', xType: 'anual', x: completos, yFormat: 'num', desdeCero: true,
                 series: [
@@ -112,10 +115,10 @@
               titulo: 'Kilos por habitante y día', sub: 'Marbella frente a la media andaluza de la Junta',
               chips: [CH_ANUAL], fuente: F_CALC, ancho: 'full',
               nota: 'Marbella: residuos recogidos entre la población empadronada. La diferencia con Andalucía es, sobre todo, la población no empadronada (turistas, segundas residencias). ' +
-                'Los puntos de 2023 y 2025 salen de las notas de balance de la Mancomunidad y parecen referirse solo a la fracción resto.',
+                'Hay un salto de serie entre 2019 y 2020 por el cambio de fuente (ver aviso). La Junta no ha publicado todavía 2024 y 2025.',
               spec: (function () {
                 var xs = {};
-                completos.forEach(function (y) { xs[y] = 1; }); J.x.forEach(function (y) { xs[y] = 1; }); PR.x.forEach(function (y) { xs[y] = 1; });
+                completos.forEach(function (y) { xs[y] = 1; }); J.x.forEach(function (y) { xs[y] = 1; });
                 var x = Object.keys(xs).sort().filter(function (y) { return y >= (completos[0] || '2014'); });
                 var de = function (arrX, arrV) { return x.map(function (y) { var i = arrX.indexOf(y); return i < 0 ? null : arrV[i]; }); };
                 return {
@@ -123,8 +126,7 @@
                   series: [
                     { name: 'Marbella, total', data: de(A.x, A.kg_hab_dia) },
                     { name: 'Marbella, solo resto', data: de(A.x, A.kg_hab_dia_resto) },
-                    { name: 'Andalucía (Junta)', data: de(J.x, J.kg_hab_dia) },
-                    { name: 'Marbella, nota de prensa', data: de(PR.x, PR.kg_hab_dia) }
+                    { name: 'Andalucía (Junta)', data: de(J.x, J.kg_hab_dia) }
                   ]
                 };
               })()
@@ -166,39 +168,66 @@
         return {
           nota: AVISO_SERIE, notaTipo: 'warn',
           kpis: [
+            (function () {
+              var n = TR.x.length - 1, q = TR.x[n], q0 = q ? (+q.slice(0, 4) - 1) + q.slice(4) : null, i0 = TR.x.indexOf(q0);
+              return { label: 'Resto · ' + Obs.periodo(q, 'trim'), valor: TR.resto[n], unidad: 't',
+                       delta: i0 >= 0 && TR.resto[i0] ? (TR.resto[n] - TR.resto[i0]) / TR.resto[i0] * 100 : null,
+                       deltaRef: 'sobre ' + Obs.periodo(q0, 'trim'), invertir: true, serie: TR.resto.slice(-12) };
+            })(),
             { label: 'Mes de más residuos · ' + ref, valor: mx, unidad: 't' },
             { label: 'Mes de menos residuos · ' + ref, valor: mn, unidad: 't' },
             { label: 'Pico sobre valle · ' + ref, valor: mn ? (mx / mn - 1) * 100 : null, unidad: '%', dec: 0 },
-            { label: 'Peso de Marbella en el resto comarcal · ' + ref, valor: (function () { var i = ia(ref); var s = 0, c = 0; M.x.forEach(function (p, j) { if (p.slice(0, 4) === ref) { s += M.resto[j] || 0; c += M.resto_comarca[j] || 0; } }); return c ? s / c * 100 : null; })(), unidad: '%', dec: 1 }
+            (function () {
+              /* Solo los PDF de la Mancomunidad traen el total comarcal: último año completo con dato. */
+              var y = completos.filter(function (a) { return mesesDe(M.resto_comarca, a).every(function (v) { return v != null; }); }).pop();
+              var s = 0, c = 0;
+              M.x.forEach(function (p, j) { if (p.slice(0, 4) === y) { s += M.resto[j] || 0; c += M.resto_comarca[j] || 0; } });
+              return { label: 'Peso de Marbella en el resto comarcal · ' + (y || '—'), valor: c ? s / c * 100 : null, unidad: '%', dec: 1 };
+            })()
           ],
           cards: [
             {
+              titulo: 'Residuos por trimestre', sub: 'Toneladas de resto y de recogida selectiva',
+              chips: [CH_MES], fuente: F_AMBAS, ancho: 'full',
+              nota: 'Los trimestres del año en curso salen del bloque que costadelsol.eco publica al cerrar cada trimestre; el proceso semanal los guarda para no perderlos cuando la web pasa al siguiente.',
+              spec: { type: 'stack', xType: 'trim', x: TR.x, yFormat: 'num', zoom: true, zoomDesde: '2023T1',
+                      series: [{ name: 'Resto', data: TR.resto },
+                               { name: 'Envases', data: TR.envases },
+                               { name: 'Vidrio', data: TR.vidrio },
+                               { name: 'Papel-cartón', data: TR.papel }] }
+            },
+            {
               titulo: 'Residuos por mes y fracción', sub: 'Toneladas',
-              chips: [CH_MES], fuente: F_MANC, ancho: 'full',
+              chips: [CH_MES], fuente: F_AMBAS, ancho: 'full',
               control: { label: 'Año', valor: ref, opciones: opcAnios, spec: porFraccion },
               spec: porFraccion(ref)
             },
             {
               titulo: 'Resto: un año frente al anterior', sub: 'Toneladas de la fracción resto',
-              chips: [CH_MES], fuente: F_MANC,
+              chips: [CH_MES], fuente: F_AMBAS,
               control: { label: 'Año', valor: ref, opciones: opcAnios, spec: resto },
               spec: resto(ref)
             },
             {
               titulo: 'Recogida selectiva cada mes', sub: 'Porcentaje sobre el total recogido',
-              chips: [CH_MES], fuente: F_MANC,
+              chips: [CH_MES], fuente: F_AMBAS,
               spec: { type: 'line', xType: 'mes', x: M.x, yFormat: 'pct', series: [{ name: '% selectiva', data: M.pct_selectiva }] }
             },
             {
               titulo: 'Serie mensual completa', sub: 'Toneladas de resto y de recogida selectiva',
-              chips: [CH_MES], fuente: F_MANC, ancho: 'full',
+              chips: [CH_MES], fuente: F_AMBAS, ancho: 'full',
               spec: { type: 'line', xType: 'mes', x: M.x, yFormat: 'num', zoom: true,
                       series: [{ name: 'Resto', data: M.resto }, { name: 'Selectiva', data: M.selectiva }] }
             },
             {
               titulo: 'Peso de Marbella en la Costa del Sol', sub: 'Resto de Marbella sobre el de los 11 municipios y particulares',
               chips: [CH_MES], fuente: F_MANC,
-              spec: { type: 'line', xType: 'mes', x: M.x, yFormat: 'pct', series: [{ name: '% del total comarcal', data: M.pct_comarca }] }
+              nota: 'Solo con los PDF de la Mancomunidad (2014-2019), que traen el total comarcal.',
+              spec: (function () {
+                var idx = M.x.map(function (_, i) { return i; }).filter(function (i) { return M.pct_comarca[i] != null; });
+                return { type: 'line', xType: 'mes', x: idx.map(function (i) { return M.x[i]; }), yFormat: 'pct',
+                         series: [{ name: '% del total comarcal', data: idx.map(function (i) { return M.pct_comarca[i]; }) }] };
+              })()
             }
           ]
         };
@@ -232,16 +261,16 @@
         return {
           nota: '<b>Es una estimación, no un censo.</b> Supone que visitantes y residentes no empadronados generan lo mismo que un andaluz medio. ' +
             'Sobrestima si parte de la basura es de hoteles, restaurantes y comercios por encima de la media andaluza; subestima si esos residuos van por gestores privados. ' +
-            'El ratio de la Junta cambió de método en 2020 (de unos 490 a unos 550 kg por habitante y año), lo que rebaja la cifra de ese año. ' +
+            'Dos saltos de serie rebajan la cifra desde 2020: la Junta cambió de método (de unos 490 a unos 550 kg por habitante y año) y la fracción resto pasa de la Mancomunidad a costadelsol.eco, que da un 10 % menos. Compare años dentro de cada tramo (2014-2019 y 2020 en adelante). ' +
             (notas.length ? 'Nota: ' + notas.join('; ') + '.' : ''),
           notaTipo: 'warn',
           hero: {
-            valor: i19 >= 0 ? PA.flotante[i19] : null, label: 'Población flotante media en 2019, último año prepandemia',
+            valor: iU >= 0 ? PA.flotante[iU] : null, label: 'Población flotante media en ' + ultAnio,
             extra: [
-              { label: 'Padrón 2019', valor: i19 >= 0 ? PA.padron[i19] : null },
-              { label: 'Población equivalente 2019', valor: i19 >= 0 ? PA.equivalente[i19] : null },
-              { label: 'Pico mensual 2019 (' + mesPico('2019') + ')', valor: pic('2019') },
-              { label: 'Padrón ' + (PAD.x[PAD.x.length - 1] || ''), valor: PAD.v[PAD.v.length - 1] }
+              { label: 'Padrón ' + ultAnio, valor: iU >= 0 ? PA.padron[iU] : null },
+              { label: 'Población equivalente ' + ultAnio, valor: iU >= 0 ? PA.equivalente[iU] : null },
+              { label: 'Pico mensual ' + ultAnio + ' (' + mesPico(ultAnio) + ')', valor: pic(ultAnio) },
+              { label: 'Flotante media 2019', valor: i19 >= 0 ? PA.flotante[i19] : null },
             ]
           },
           cards: [
@@ -254,8 +283,8 @@
             {
               titulo: 'Población flotante por meses', sub: 'Equivalente menos empadronados',
               chips: [CH_MES, CH_EST], fuente: F_CALC,
-              control: { label: 'Año', valor: completos.indexOf('2019') >= 0 ? '2019' : ultAnio, opciones: opc, spec: perfil },
-              spec: perfil(completos.indexOf('2019') >= 0 ? '2019' : ultAnio)
+              control: { label: 'Año', valor: ultAnio, opciones: opc, spec: perfil },
+              spec: perfil(ultAnio)
             },
             {
               titulo: 'Población flotante media anual', sub: 'Personas por encima del padrón',
@@ -273,7 +302,7 @@
             {
               titulo: 'Ratio de referencia de la Junta', sub: 'Residuos municipales por habitante y año en Andalucía',
               chips: [CH_ANUAL], fuente: F_JUNTA,
-              nota: 'Cada cifra procede de la ficha o del informe de la Junta que se cita en la tabla. 2019 no se publicó: se usa la de 2018.',
+              nota: 'Cada cifra procede de la ficha o del informe de la Junta que se cita en la tabla. 2019 no se publicó: se usa la de 2018. Para 2024 y 2025 se usa la de 2023, la última publicada.',
               spec: { type: 'bar', xType: 'anual', x: J.x, yFormat: 'num', unidad: 'kg',
                       series: [{ name: 'kg por habitante y año', data: J.kg_hab_anio }] }
             },
@@ -299,14 +328,14 @@
     icono: ICONO,
     secciones: SECCIONES,
     actualizado: (D.meta || {}).actualizado,
-    fuentes: [F_MANC, F_INE, F_JUNTA],
-    metodologia: 'Un proceso automático (<code>pipeline/build_data.py</code>) revisa cada semana la web de la Mancomunidad (PDF anuales y notas de balance), ' +
+    fuentes: [F_ECO, F_MANC, F_INE, F_JUNTA],
+    metodologia: 'Un proceso automático (<code>pipeline/build_data.py</code>) revisa cada semana costadelsol.eco (informe histórico y trimestre en curso) y la web de la Mancomunidad (PDF anuales), ' +
       'descarga el padrón del INE y recalcula la población equivalente con el ratio andaluz de la Junta de Andalucía. ' +
       'Los números de los PDF se validan comprobando que los doce meses sumen el total que da la propia tabla.',
-    pie: 'Los datos son de la Mancomunidad de Municipios de la Costa del Sol Occidental (Complejo Ambiental Costa del Sol, gestionado por Urbaser), el INE y la Junta de Andalucía. ' +
+    pie: 'Los datos son del portal costadelsol.eco y de la Mancomunidad de Municipios de la Costa del Sol Occidental (Complejo Ambiental Costa del Sol, gestionado por Urbaser), el INE y la Junta de Andalucía. ' +
       'La población flotante es una estimación de este observatorio, no una cifra oficial.'
   });
 
-  Obs.estado('Residuos hasta ' + Obs.periodo(ultMes, 'mes') + ' · Padrón ' + ((D.meta || {}).ultimo_padron || '—'), 'live');
+  Obs.estado('Residuos mensuales hasta ' + Obs.periodo(ultMes, 'mes') + ' · trimestral hasta ' + Obs.periodo((D.meta || {}).ultimo_trimestre, 'trim') + ' · Padrón ' + ((D.meta || {}).ultimo_padron || '—'), 'live');
 
 })();
