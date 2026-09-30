@@ -1,7 +1,7 @@
 name: Actualizar datos
 
-# Cada lunes a las 05:30 UTC: revisa si la Mancomunidad ha publicado un PDF
-# anual o una nota de balance nuevos y si el INE ha publicado padrón: una pasada semanal
+# Cada lunes a las 05:30 UTC: revisa si costadelsol.eco ha publicado un informe
+# o trimestre nuevos y si la Junta ha publicado otra edición del IMA: una pasada semanal
 # recoge cada novedad sin estar pendiente de fechas. Si no hay nada nuevo, no
 # se hace commit. Se puede lanzar a mano desde la pestaña Actions.
 on:

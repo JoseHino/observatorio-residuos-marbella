@@ -26,11 +26,43 @@ import os
 import re
 
 from .comun import get, ok, aviso
-from .mancomunidad import _fila
 
 PAGINA = "https://costadelsol.eco/marbella/"
 UA_NAV = {"User-Agent": "Mozilla/5.0 (observatorio-residuos; solo lectura)"}
 TRIM = {"primer": 1, "segundo": 2, "tercer": 3, "cuarto": 4}
+NUMOK = re.compile(r"^(?:0|[1-9]\d{0,2}(?:\.\d{3})*)$")
+
+
+def _val(s):
+    return int(s.replace(".", ""))
+
+
+def _fila(tokens, tol):
+    """Une tokens hasta obtener numeros validos cuyos meses sumen el total."""
+    n = len(tokens)
+    if n > 18:
+        return None
+    mejor = None
+    for mask in range(1 << (n - 1)):
+        nums, cur, valido = [], tokens[0], True
+        for i in range(1, n):
+            if mask >> (i - 1) & 1:
+                cur += tokens[i]
+            else:
+                if not NUMOK.match(cur):
+                    valido = False
+                    break
+                nums.append(cur)
+                cur = tokens[i]
+        if not valido or not NUMOK.match(cur):
+            continue
+        nums.append(cur)
+        if not 2 <= len(nums) <= 13:
+            continue
+        v = [_val(x) for x in nums]
+        if abs(sum(v[:-1]) - v[-1]) <= tol and (mejor is None or len(v) > len(mejor)):
+            mejor = v
+    return mejor
 
 
 def _texto(h):

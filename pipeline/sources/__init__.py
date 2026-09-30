@@ -1,4 +1,4 @@
 # -*- coding: utf-8 -*-
-"""Conectores: Mancomunidad Costa del Sol (datos del complejo que gestiona Urbaser) e INE."""
+"""Conectores: costadelsol.eco (residuos y censo de Marbella) y Junta de Andalucia (ratio por habitante)."""
 
-from . import comun, ine, mancomunidad, costadelsol_eco  # noqa: F401
+from . import comun, costadelsol_eco, junta  # noqa: F401
